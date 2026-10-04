@@ -1,0 +1,348 @@
+@import "tailwindcss";
+
+@theme {
+  /* Neutres chauds (pierre) */
+  --color-ink-50: #fafaf9;
+  --color-ink-100: #f5f5f4;
+  --color-ink-200: #e7e5e4;
+  --color-ink-300: #d6d3d1;
+  --color-ink-400: #a8a29e;
+  --color-ink-500: #78716c;
+  --color-ink-600: #57534e;
+  --color-ink-700: #44403c;
+  --color-ink-800: #292524;
+  --color-ink-900: #1c1917;
+  --color-ink-950: #0f0d0b;
+
+  /* Or : l'accent de la marque */
+  --color-gold-50: #fbf7ef;
+  --color-gold-100: #f5ecd9;
+  --color-gold-200: #ead6ad;
+  --color-gold-300: #ddbc7c;
+  --color-gold-400: #d0a257;
+  --color-gold-500: #c08a3e;
+  --color-gold-600: #a97432;
+  --color-gold-700: #8c5d2a;
+  --color-gold-800: #724b27;
+  --color-gold-900: #5e3f24;
+  --color-gold-950: #352011;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Couleurs de surface qui suivent le theme : bg-surface, text-muted, border-line… */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-line: var(--border);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+}
+
+:root {
+  color-scheme: light;
+  --surface: #ffffff;
+  --surface-alt: #f7f4ee;
+  --border: #e7e1d6;
+  --text: #1c1917;
+  --text-muted: #6b6358;
+  --accent-text: var(--color-gold-700);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --surface: #1a1815;
+    --surface-alt: #0f0e0c;
+    --border: #2e2a24;
+    --text: #f3efe7;
+    --text-muted: #a8a092;
+    --accent-text: var(--color-gold-300);
+  }
+}
+
+/*
+ * Styles de base et composants dans leurs couches : les utilitaires Tailwind
+ * (pl-9, text-right, border-gold-600…) passent toujours devant.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border);
+  }
+
+  body {
+    background: var(--surface-alt);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.875rem;
+    box-shadow: 0 1px 2px rgb(28 25 23 / 0.04);
+  }
+
+  .eyebrow {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent-text);
+  }
+
+  .accent {
+    color: var(--accent-text);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 0.625rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.6rem 1rem;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+    cursor: pointer;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--color-gold-500);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background: var(--color-gold-700);
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(28 25 23 / 0.12);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-gold-800);
+  }
+
+  .btn-dark {
+    background: var(--color-ink-900);
+    color: var(--color-gold-200);
+  }
+  .btn-dark:hover:not(:disabled) {
+    background: var(--color-ink-800);
+  }
+
+  .btn-outline {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .btn-outline:hover:not(:disabled) {
+    background: var(--surface-alt);
+    border-color: var(--color-ink-300);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-alt);
+    color: var(--text);
+  }
+
+  .btn-success {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #a7f3d0;
+  }
+  .btn-success:hover:not(:disabled) {
+    background: #d1fae5;
+  }
+
+  .btn-danger {
+    background: #fef2f2;
+    color: #b91c1c;
+    border-color: #fecaca;
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: #fee2e2;
+  }
+
+  .btn-sm {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  .btn-icon {
+    padding: 0.4rem;
+  }
+
+  .input,
+  .select,
+  .textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.625rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text);
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .input:focus,
+  .select:focus,
+  .textarea:focus {
+    outline: none;
+    border-color: var(--color-gold-500);
+    box-shadow: 0 0 0 3px rgb(192 138 62 / 0.2);
+  }
+  .input::placeholder,
+  .textarea::placeholder {
+    color: var(--color-ink-400);
+  }
+  .input[type="number"] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.3rem;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+  }
+  table.data {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  table.data th {
+    text-align: left;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.data td {
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  table.data tr:last-child td {
+    border-bottom: 0;
+  }
+  table.data tbody tr:hover td {
+    background: var(--surface-alt);
+  }
+  /* Numeros de documents (RES-2026-0001…) : jamais coupes aux tirets. */
+  table.data .font-mono {
+    white-space: nowrap;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Apercu des documents : toujours sur fond "papier", quel que soit le theme. */
+  .paper {
+    background: #fff;
+    color: #1c1917;
+    border: 1px solid #e7e1d6;
+    border-radius: 0.5rem;
+    box-shadow:
+      0 1px 3px rgb(28 25 23 / 0.06),
+      0 8px 24px rgb(28 25 23 / 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .btn-outline:hover:not(:disabled) {
+      border-color: var(--color-ink-600);
+    }
+    .btn-dark {
+      background: var(--color-gold-300);
+      color: var(--color-ink-950);
+    }
+    .btn-dark:hover:not(:disabled) {
+      background: var(--color-gold-200);
+    }
+    .btn-danger {
+      background: rgb(127 29 29 / 0.25);
+      border-color: rgb(153 27 27 / 0.5);
+      color: #fca5a5;
+    }
+    .btn-success {
+      background: rgb(6 78 59 / 0.3);
+      border-color: rgb(6 95 70 / 0.6);
+      color: #6ee7b7;
+    }
+    .paper {
+      border-color: transparent;
+    }
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .print-full {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .paper {
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+}

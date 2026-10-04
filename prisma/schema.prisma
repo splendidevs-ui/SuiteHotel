@@ -1,0 +1,398 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// SuiteHotel — Schéma de données
+// SQLite en développement. Pas d'enum natif : rôles, statuts, formules et modes
+// de règlement sont des String contraints côté application (src/lib/constants.ts),
+// le schéma reste donc compatible postgresql sans modification de modèle.
+//
+// Montants : entiers en unité stockée (voir src/lib/money.ts), hors taxes sauf
+// mention contraire. Dates de séjour : dates calendaires à minuit UTC.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Hôtel (ligne unique, id = "main") : en-tête des documents, tarifs annexes, options.
+model Hotel {
+  id                String   @id @default("main")
+  name              String
+  tagline           String?
+  stars             Int      @default(5)
+  address           String?
+  city              String?
+  country           String   @default("Côte d'Ivoire")
+  phone             String?
+  email             String?
+  website           String?
+  taxId             String? // N° de compte contribuable
+  tradeRegister     String? // RCCM
+  bankDetails       String?
+  currency          String   @default("XOF")
+  vatRate           Float    @default(18)
+  cityTax           Int      @default(0) // taxe de séjour, par chambre et par nuit (hors TVA)
+  checkInTime       String   @default("14:00")
+  checkOutTime      String   @default("12:00")
+  quoteValidityDays Int      @default(15)
+  quoteTerms        String?
+  restaurantEnabled Boolean  @default(true) // module restauration (option)
+  restaurantName    String?
+  breakfastPrice    Int      @default(0) // formules : par personne et par nuit, HT
+  halfBoardPrice    Int      @default(0)
+  fullBoardPrice    Int      @default(0)
+  updatedAt         DateTime @updatedAt
+
+  @@map("hotel")
+}
+
+/// Membre du personnel (direction, réception). Jamais supprimé : désactivé.
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         String    @default("RECEPTION") // DIRECTION | RECEPTION
+  jobTitle     String?
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions          Session[]
+  reservations      Reservation[]
+  quotes            Quote[]
+  receipts          Receipt[]         @relation("ReceiptCreatedBy")
+  receiptsCancelled Receipt[]         @relation("ReceiptCancelledBy")
+  charges           Charge[]
+  orders            RestaurantOrder[]
+
+  @@map("users")
+}
+
+/// Session d'authentification (cookie httpOnly). Seule l'empreinte du jeton est stockée.
+model Session {
+  id           String   @id @default(cuid())
+  tokenHash    String   @unique
+  userId       String
+  expiresAt    DateTime
+  /// Reservation en cours de saisie (parcours chambres -> sejour -> client), en JSON.
+  /// Effacee a la confirmation, a l'abandon ou a la deconnexion.
+  bookingDraft String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+/// Compteurs de numérotation annuelle : clé "RES-2026", "DEV-2026", "REC-2026", "CMD-2026".
+model Counter {
+  key   String @id
+  value Int
+
+  @@map("counters")
+}
+
+/// Catégorie de chambre : porte le tarif de base et la capacité.
+model RoomType {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  capacity    Int     @default(2) // personnes au maximum par chambre
+  basePrice   Int // tarif par nuit, HT
+  size        Int? // m²
+  bed         String?
+  amenities   String? // une prestation par ligne
+  sortOrder   Int     @default(0)
+  active      Boolean @default(true)
+
+  rooms      Room[]
+  quoteRooms QuoteRoom[]
+
+  @@map("room_types")
+}
+
+model Room {
+  id           String   @id @default(cuid())
+  number       String   @unique
+  floor        Int      @default(0)
+  roomTypeId   String
+  outOfService Boolean  @default(false)
+  notes        String? // motif de mise hors service
+  createdAt    DateTime @default(now())
+
+  roomType RoomType          @relation(fields: [roomTypeId], references: [id])
+  stays    ReservationRoom[]
+
+  @@index([roomTypeId])
+  @@map("rooms")
+}
+
+/// Client de l'hôtel (fiche réutilisée d'un séjour et d'un devis à l'autre).
+model Guest {
+  id          String   @id @default(cuid())
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  nationality String?
+  idType      String? // Passeport, CNI…
+  idNumber    String?
+  company     String?
+  address     String?
+  vip         Boolean  @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reservations Reservation[]
+  quotes       Quote[]
+
+  @@index([lastName])
+  @@map("guests")
+}
+
+/// Réservation d'un client : une ou plusieurs chambres, mêmes dates de séjour.
+/// Les montants de la note de séjour sont calculés à la lecture (src/lib/folio.ts).
+model Reservation {
+  id            String    @id @default(cuid())
+  number        String    @unique // RES-2026-0001
+  guestId       String
+  status        String    @default("CONFIRMEE") // CONFIRMEE | EN_SEJOUR | TERMINEE | ANNULEE
+  checkIn       DateTime
+  checkOut      DateTime
+  /// Heures prevues d'arrivee et de depart (HH:MM). Les nuits facturees et la
+  /// disponibilite restent calculees sur les dates calendaires.
+  checkInTime   String    @default("14:00")
+  checkOutTime  String    @default("12:00")
+  mealPlan      String    @default("CHAMBRE_SEULE")
+  mealPlanPrice Int       @default(0) // figé à la réservation : par personne et par nuit, HT
+  cityTax       Int       @default(0) // figé : par chambre et par nuit
+  vatRate       Float
+  currency      String
+  source        String    @default("DIRECT")
+  notes         String?
+  quoteId       String?   @unique
+  checkedInAt   DateTime?
+  checkedOutAt  DateTime?
+  cancelledAt   DateTime?
+  cancelReason  String?
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  guest     Guest             @relation(fields: [guestId], references: [id])
+  createdBy User              @relation(fields: [createdById], references: [id])
+  quote     Quote?            @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  rooms     ReservationRoom[]
+  charges   Charge[]
+  orders    RestaurantOrder[]
+  receipts  Receipt[]
+
+  @@index([status])
+  @@index([checkIn])
+  @@index([checkOut])
+  @@index([guestId])
+  @@map("reservations")
+}
+
+model ReservationRoom {
+  id            String @id @default(cuid())
+  reservationId String
+  roomId        String
+  adults        Int    @default(1)
+  children      Int    @default(0)
+  nightlyRate   Int // HT, négociable
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  room        Room        @relation(fields: [roomId], references: [id])
+
+  @@unique([reservationId, roomId])
+  @@index([roomId])
+  @@map("reservation_rooms")
+}
+
+/// Prestation portée sur la note de séjour (spa, transfert, blanchisserie…).
+model Charge {
+  id            String   @id @default(cuid())
+  reservationId String
+  date          DateTime
+  designation   String
+  quantity      Float    @default(1)
+  unitPrice     Int
+  total         Int
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation(fields: [createdById], references: [id])
+
+  @@index([reservationId])
+  @@map("charges")
+}
+
+/// Devis de séjour : par catégorie de chambre, les numéros sont attribués à la réservation.
+model Quote {
+  id            String   @id @default(cuid())
+  number        String   @unique // DEV-2026-0001
+  guestId       String
+  status        String   @default("BROUILLON") // BROUILLON | ENVOYE | ACCEPTE | REFUSE
+  issueDate     DateTime
+  validUntil    DateTime
+  checkIn       DateTime
+  checkOut      DateTime
+  mealPlan      String   @default("CHAMBRE_SEULE")
+  mealPlanPrice Int      @default(0)
+  cityTax       Int      @default(0)
+  vatRate       Float
+  currency      String
+  notes         String?
+  subtotal      Int      @default(0) // total HT
+  vatAmount     Int      @default(0)
+  cityTaxAmount Int      @default(0)
+  total         Int      @default(0) // total TTC
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  guest       Guest        @relation(fields: [guestId], references: [id])
+  createdBy   User         @relation(fields: [createdById], references: [id])
+  rooms       QuoteRoom[]
+  extras      QuoteExtra[]
+  reservation Reservation?
+
+  @@index([status])
+  @@index([guestId])
+  @@map("quotes")
+}
+
+model QuoteRoom {
+  id          String @id @default(cuid())
+  quoteId     String
+  roomTypeId  String
+  position    Int
+  quantity    Int // nombre de chambres de cette catégorie
+  adults      Int // par chambre
+  children    Int    @default(0) // par chambre
+  nightlyRate Int
+
+  quote    Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  roomType RoomType @relation(fields: [roomTypeId], references: [id])
+
+  @@index([quoteId])
+  @@map("quote_rooms")
+}
+
+model QuoteExtra {
+  id          String @id @default(cuid())
+  quoteId     String
+  position    Int
+  designation String
+  quantity    Float
+  unitPrice   Int
+  total       Int
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+  @@map("quote_extras")
+}
+
+/// Reçu : chaque encaissement (acompte, solde, addition du restaurant) en émet un.
+/// Jamais supprimé : un reçu erroné est annulé par la direction, avec un motif.
+model Receipt {
+  id            String    @id @default(cuid())
+  number        String    @unique // REC-2026-0001
+  reservationId String?
+  orderId       String?
+  payerName     String
+  label         String
+  amount        Int // TTC
+  currency      String    @default("XOF")
+  method        String // ESPECES | CARTE | MOBILE_MONEY | VIREMENT | CHEQUE
+  reference     String?
+  balanceAfter  Int? // reste à payer sur le séjour après cet encaissement
+  paidAt        DateTime  @default(now())
+  createdById   String
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancelReason  String?
+  createdAt     DateTime  @default(now())
+
+  reservation Reservation?     @relation(fields: [reservationId], references: [id])
+  order       RestaurantOrder? @relation(fields: [orderId], references: [id])
+  createdBy   User             @relation("ReceiptCreatedBy", fields: [createdById], references: [id])
+  cancelledBy User?            @relation("ReceiptCancelledBy", fields: [cancelledById], references: [id])
+
+  @@index([reservationId])
+  @@index([orderId])
+  @@index([paidAt])
+  @@map("receipts")
+}
+
+/// Carte du restaurant (module optionnel).
+model MenuItem {
+  id          String  @id @default(cuid())
+  name        String
+  category    String // PETIT_DEJEUNER | ENTREE | PLAT | DESSERT | BOISSON | VIN
+  description String?
+  price       Int // HT
+  available   Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  lines OrderLine[]
+
+  @@index([category])
+  @@map("menu_items")
+}
+
+/// Addition du restaurant : imputée sur la note d'un client en séjour, ou encaissée.
+model RestaurantOrder {
+  id            String    @id @default(cuid())
+  number        String    @unique // CMD-2026-0001
+  status        String    @default("OUVERTE") // OUVERTE | IMPUTEE | REGLEE | ANNULEE
+  tableLabel    String
+  covers        Int       @default(1)
+  reservationId String?
+  guestName     String?
+  vatRate       Float
+  subtotal      Int       @default(0)
+  vatAmount     Int       @default(0)
+  total         Int       @default(0)
+  notes         String?
+  createdById   String
+  closedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+  createdBy   User         @relation(fields: [createdById], references: [id])
+  lines       OrderLine[]
+  receipts    Receipt[]
+
+  @@index([status])
+  @@index([reservationId])
+  @@map("restaurant_orders")
+}
+
+model OrderLine {
+  id         String  @id @default(cuid())
+  orderId    String
+  menuItemId String?
+  name       String
+  quantity   Int
+  unitPrice  Int
+  total      Int
+
+  order    RestaurantOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem?       @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@map("order_lines")
+}
